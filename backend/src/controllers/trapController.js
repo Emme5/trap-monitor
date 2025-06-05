@@ -48,12 +48,13 @@ export const deleteTrap = async (req, res) => {
     const deletedTrap = await Trap.findByIdAndDelete(id);
     
     if (!deletedTrap) {
-      return res.status(404).json({ message: 'ไม่พบกับดักที่ระบุ' });
+      return res.status(404).json({ message: 'ไม่พบกับดักที่ต้องการลบ' });
     }
 
-    res.status(200).json({ message: 'ลบกับดักเรียบร้อยแล้ว' });
+    res.status(200).json({ message: 'ลบกับดักเรียบร้อยแล้ว', id });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Delete error:', error);
+    res.status(500).json({ message: 'เกิดข้อผิดพลาดในการลบกับดัก' });
   }
 };
 

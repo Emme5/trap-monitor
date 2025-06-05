@@ -24,11 +24,51 @@ export const trapApi = {
     return response.json();
   },
 
-  deleteTrap: async (id) => {
+updateTrap: async (id, updateData) => {
+  try {
+    console.log('Updating trap with data:', updateData); // Debug log
+
     const response = await fetch(`${BASE_URL}/${id}`, {
-      method: 'DELETE'
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateData)
     });
-    return response.json();
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to update trap');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error updating trap:', error);
+    throw error;
+  }
+},
+
+  deleteTrap: async (id) => {
+    try {
+      const response = await fetch(`${BASE_URL}/traps/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete trap');
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error deleting trap:', error);
+      throw error;
+    }
   },
 
   getTrapByQR: async (qrCode) => {

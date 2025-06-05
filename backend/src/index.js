@@ -23,10 +23,7 @@ app.use('/api/traps', trapRoutes);
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ 
-    message: 'Something went wrong!',
-    error: process.env.NODE_ENV === 'development' ? err.message : {}
-  });
+  res.status(500).json({ message: 'ไม่สามารถดำเนินการได้', error: err.message });
 });
 
 // Start server

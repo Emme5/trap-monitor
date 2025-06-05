@@ -1,47 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertTriangle, Bug, Calendar, MapPin, MessageCircleWarning, Plus, Trash2, RefreshCw, QrCode, Camera, Download, FileChartColumnIncreasing } from 'lucide-react';
+import { AlertTriangle, Bug, Calendar, MapPin, MessageCircleWarning, Plus, Trash2, QrCode, Camera, Download, FileChartColumnIncreasing } from 'lucide-react';
 import { trapApi } from './api/trapApi';
-import AddTrapButton from './AddTrapButton';
+import AddTrapButton from './component/AddTrapButton';
+import TrapDisplayForm from './component/TrapDisplayForm';
 
 const InsectTrapMonitor = () => {
-  const [traps, setTraps] = useState([
-    {
-      id: 1,
-      name: 'กับดักที่ 1 - โรงเรือน A',
-      location: 'โรงเรือนผลไม้ ตำแหน่ง A1',
-      status: 'normal',
-      lastCheck: '2025-06-02',
-      insectCount: 15,
-      efficiency: 85,
-      type: 'เหลือง',
-      notes: 'สภาพดี ต้องเปลี่ยนในอีก 3 วัน',
-      qrCode: 'TRAP001'
-    },
-    {
-      id: 2,
-      name: 'กับดักที่ 2 - โรงเรือน B',
-      location: 'โรงเรือนผัก ตำแหน่ง B2',
-      status: 'warning',
-      lastCheck: '2025-06-01',
-      insectCount: 45,
-      efficiency: 60,
-      type: 'น้ำเงิน',
-      notes: 'กาวเริ่มแห้ง ควรเปลี่ยนเร็วๆ นี้',
-      qrCode: 'TRAP002'
-    },
-    {
-      id: 3,
-      name: 'กับดักที่ 3 - โรงเรือน C',
-      location: 'โรงเรือนไม้ดอก ตำแหน่ง C1',
-      status: 'critical',
-      lastCheck: '2025-05-30',
-      insectCount: 78,
-      efficiency: 25,
-      type: 'เหลือง',
-      notes: 'กาวเต็ม ต้องเปลี่ยนทันที!',
-      qrCode: 'TRAP003'
-    }
-  ]);
+  const updateTrap = async (id, updateData) => {
+  try {
+    // เรียก API เพื่ออัพเดทข้อมูล
+    await trapApi.updateTrap(id, updateData);
+    
+    // อัพเดท state หลังจากบันทึกสำเร็จ
+    setTraps(prevTraps => 
+      prevTraps.map(trap => 
+        trap._id === id ? { ...trap, ...updateData } : trap
+      )
+    );
+    
+    alert('บันทึกข้อมูลเรียบร้อย');
+  } catch (error) {
+    console.error('Error:', error);
+    throw error; // ส่ง error ไปให้ component ลูกจัดการ
+  }
+};
+
+  const calculateDaysRemaining = (installDate, expiryDate) => {
+  if (!installDate || !expiryDate) return 0;
+  const today = new Date();
+  const expiry = new Date(expiryDate);
+  const diffTime = expiry - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays > 0 ? diffDays : 0;
+};
+
+  const [traps, setTraps] = useState([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingTrap, setEditingTrap] = useState(null);
@@ -49,7 +41,6 @@ const InsectTrapMonitor = () => {
   const [showQRGenerator, setShowQRGenerator] = useState(null);
   const [scanResult, setScanResult] = useState('');
   const [updateForm, setUpdateForm] = useState({
-    insectCount: '',
     notes: '',
     status: 'normal'
   });
@@ -131,7 +122,6 @@ const InsectTrapMonitor = () => {
       const foundTrap = traps.find(trap => trap.qrCode === randomQR);
       if (foundTrap) {
         setUpdateForm({
-          insectCount: foundTrap.insectCount.toString(),
           notes: foundTrap.notes,
           status: foundTrap.status
         });
@@ -148,7 +138,6 @@ const InsectTrapMonitor = () => {
         const updatedTraps = [...traps];
         updatedTraps[trapIndex] = {
           ...updatedTraps[trapIndex],
-          insectCount: parseInt(updateForm.insectCount) || 0,
           notes: updateForm.notes,
           status: updateForm.status,
           lastCheck: new Date().toISOString().split('T')[0]
@@ -156,7 +145,7 @@ const InsectTrapMonitor = () => {
         setTraps(updatedTraps);
         setScanResult('');
         setShowQRScanner(false);
-        setUpdateForm({ insectCount: '', notes: '', status: 'normal' });
+        setUpdateForm({ notes: '', status: 'normal' });
         alert('อัปเดตข้อมูลกับดักเรียบร้อยแล้ว!');
       }
     }
@@ -201,72 +190,59 @@ const InsectTrapMonitor = () => {
   }, []);
 
   const addTrap = async () => {
-    if (newTrap.name && newTrap.location) {
-      try {
-        setLoading(true);
-        const qrCode = `TRAP${String(Date.now()).slice(-6)}`;
-        const trapData = {
-          ...newTrap,
-          status: 'normal',
-          lastCheck: new Date().toISOString().split('T')[0],
-          insectCount: 0,
-          efficiency: 100,
-          qrCode
-        };
-        
-        const createdTrap = await trapApi.createTrap(trapData);
-        setTraps([...traps, createdTrap]);
-        setNewTrap({ name: '', location: '', type: 'เหลือง', notes: '' });
-        setShowAddForm(false);
-      } catch (error) {
-        setError('Failed to create trap');
-        console.error('Error:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  // Update deleteTrap function
-  const deleteTrap = async (id) => {
+  if (newTrap.name && newTrap.location) {
     try {
       setLoading(true);
-      await trapApi.deleteTrap(id);
-      setTraps(traps.filter(trap => trap.id !== id));
+      const qrCode = `TRAP${String(Date.now()).slice(-6)}`;
+      const daysRemaining = calculateDaysRemaining(newTrap.installDate, newTrap.expiryDate);
+      
+      const trapData = {
+        ...newTrap,
+        status: 'normal',
+        lastCheck: new Date().toISOString().split('T')[0],
+        daysRemaining,
+        efficiency: 100,
+        qrCode
+      };
+      
+      const createdTrap = await trapApi.createTrap(trapData);
+      setTraps([...traps, createdTrap]);
+      setNewTrap({
+        name: '',
+        location: '',
+        type: 'เหลือง',
+        notes: '',
+        installDate: new Date().toISOString().split('T')[0],
+        expiryDate: ''
+      });
+      setShowAddForm(false);
     } catch (error) {
-      setError('Failed to delete trap');
+      setError('Failed to create trap');
       console.error('Error:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }
+};
 
-const refreshTrap = async (id) => {
+  const deleteTrap = async (id) => {
   try {
-    setLoading(true);
-    const updates = {
-      lastCheck: new Date().toISOString().split('T')[0],
-      insectCount: Math.floor(Math.random() * 50),
-      efficiency: Math.floor(Math.random() * 40) + 60
-    };
-    
-    const updatedTrap = await trapApi.updateTrapByQR(id, updates);
-    setTraps(traps.map(trap => 
-      trap.id === id ? updatedTrap : trap
-    ));
+    await trapApi.deleteTrap(id);
+    setTraps(prevTraps => prevTraps.filter(trap => trap._id !== id));
+    alert('ลบกับดักเรียบร้อยแล้ว');
   } catch (error) {
-    setError('Failed to refresh trap');
     console.error('Error:', error);
-  } finally {
-    setLoading(false);
+    throw error; // ส่ง error ไปให้ component ลูกจัดการ
   }
 };
 
   const criticalTraps = traps.filter(trap => trap.status === 'critical').length;
   const warningTraps = traps.filter(trap => trap.status === 'warning').length;
-  const totalInsects = traps.reduce((sum, trap) => sum + trap.insectCount, 0);
+  const totalInsects = traps.reduce
   const avgEfficiency = Math.round(traps.reduce((sum, trap) => sum + trap.efficiency, 0) / traps.length);
-  const expiringTraps = traps.filter(trap => trap.daysRemaining <= 3).length;
+  const expiringTraps = traps.filter(trap => {
+  const daysRemaining = calculateDaysRemaining(trap.installDate, trap.expiryDate);
+  return daysRemaining <= 1; }).length;
 
   const handleAddTrap = async (trapData) => {
   try {
@@ -313,7 +289,7 @@ const refreshTrap = async (id) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-gray-600">ทั้งหมด</p>
-              <p className="text-3xl font-bold text-orange-600">{expiringTraps}</p>
+              <p className="text-3xl font-bold text-orange-600">{traps.length}</p> {/* แก้จาก expiringTraps เป็น traps.length */}
             </div>
             <div className="bg-orange-100 p-3 rounded-lg">
               <Calendar className="w-6 h-6 text-orange-600" />
@@ -336,8 +312,8 @@ const refreshTrap = async (id) => {
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-gray-600">แจ้งเตือน</p>
-              <p className="text-3xl font-bold text-green-600">{totalInsects}</p>
+              <p className="text-gray-600">หมดอายุ</p>
+              <p className="text-3xl font-bold text-green-600">{expiringTraps}</p>
             </div>
             <div className="bg-green-100 p-3 rounded-lg">
               <MessageCircleWarning className="w-6 h-6 text-green-600" />
@@ -419,10 +395,8 @@ const refreshTrap = async (id) => {
                   
                   <div className="space-y-3">
                     <input
-                      type="number"
-                      placeholder="อายุของกับดัก (วัน)"
-                      value={updateForm.insectCount}
-                      onChange={(e) => setUpdateForm({...updateForm, insectCount: e.target.value})}
+                      value={updateForm.status}
+                      onChange={(e) => setUpdateForm({...updateForm, status: e.target.value})}
                       className="w-full p-3 border rounded-lg"
                     />
                     
@@ -455,7 +429,7 @@ const refreshTrap = async (id) => {
                       onClick={() => {
                         setScanResult('');
                         setShowQRScanner(false);
-                        setUpdateForm({ insectCount: '', notes: '', status: 'normal' });
+                        setUpdateForm({notes: '', status: 'normal' });
                       }}
                       className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-lg"
                     >
@@ -502,165 +476,21 @@ const refreshTrap = async (id) => {
           </div>
         )}
 
-        {/* Add Form Modal */}
-        {showAddForm && (
-         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-xl font-bold mb-4">เพิ่มกับดักใหม่</h3>
-            <div className="space-y-4">
-              {/* ...existing input fields... */}
-            </div>
-            <div className="grid grid-cols-2 gap-4 mt-4">
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-sm text-gray-600">วันที่ติดตั้ง</div>
-                <div className="font-semibold">
-                  {new Date(newTrap.installDate).toLocaleDateString('th-TH')}
-                </div>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="text-sm text-gray-600">วันหมดอายุ</div>
-                <div className="font-semibold">
-                  {newTrap.expiryDate ? 
-                    new Date(newTrap.expiryDate).toLocaleDateString('th-TH') : 
-                    '-'
-                  }
-                </div>
-              </div>
-              <input
-                type="date"
-                placeholder="วันที่ติดตั้ง"
-                value={newTrap.installDate}
-                onChange={(e) => setNewTrap({...newTrap, installDate: e.target.value})}
-                className="w-full p-3 border rounded-lg"
-              />
-              <input
-                type="date"
-                placeholder="วันหมดอายุ"
-                value={newTrap.expiryDate}
-                onChange={(e) => setNewTrap({...newTrap, expiryDate: e.target.value})}
-                className="w-full p-3 border rounded-lg"
-              />
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={addTrap}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg"
-              >
-                เพิ่ม
-              </button>
-              <button
-                onClick={() => setShowAddForm(false)}
-                className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 py-2 px-4 rounded-lg"
-              >
-                ยกเลิก
-              </button>
-            </div>
-          </div>
-        </div>
-        )}
-
         {/* Traps Grid */}
         <div className="grid lg:grid-cols-2 gap-6">
           {traps.map(trap => (
-            <div key={trap.id} className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-800">{trap.name}</h3>
-                  <div className="flex items-center gap-2 text-gray-600 mt-1">
-                    <MapPin className="w-4 h-4" />
-                    <span>{trap.location}</span>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setShowQRGenerator(trap)}
-                    className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                    title="แสดง QR Code"
-                  >
-                    <QrCode className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => refreshTrap(trap.id)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="อัปเดตข้อมูล"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => deleteTrap(trap.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="ลบกับดัก"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium border mb-4 ${getStatusColor(trap.status)}`}>
-                {getStatusIcon(trap.status)}
-                {getStatusText(trap.status)}
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="text-sm text-gray-600">ประเภทกับดัก/สี</div>
-                  <div className="font-semibold">{trap.type}</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="text-sm text-gray-600">อายุ</div>
-                  <div className="font-semibold">{trap.insectCount} วัน</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="text-sm text-gray-600">ประสิทธิภาพ</div>
-                  <div className="font-semibold">{trap.efficiency}%</div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <div className="text-sm text-gray-600 flex items-center gap-1">
-                    <Calendar className="w-3 h-3" />
-                    ตรวจล่าสุด
-                  </div>
-                  <div className="font-semibold">{trap.lastCheck}</div>
-                </div>
-              </div>
-
-              {/* QR Code Info */}
-              <div className="bg-blue-50 rounded-lg p-3 mb-4 flex items-center justify-between">
-                <div>
-                  <div className="text-sm text-blue-600">QR Code</div>
-                  <div className="font-semibold text-blue-800">{trap.qrCode}</div>
-                </div>
-                <button
-                  onClick={() => setShowQRGenerator(trap)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-lg transition-colors"
-                >
-                  <QrCode className="w-4 h-4" />
-                </button>
-              </div>
-
-              {trap.notes && (
-                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 rounded">
-                  <div className="text-sm text-gray-600 mb-1">หมายเหตุ:</div>
-                  <div className="text-sm">{trap.notes}</div>
-                </div>
-              )}
-
-              {/* Progress Bar */}
-              <div className="mt-4">
-                <div className="flex justify-between text-sm text-gray-600 mb-1">
-                  <span>ประสิทธิภาพการดักแมลง</span>
-                  <span>{trap.efficiency}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className={`h-2 rounded-full transition-all duration-300 ${
-                      trap.efficiency >= 80 ? 'bg-green-500' : 
-                      trap.efficiency >= 60 ? 'bg-yellow-500' : 'bg-red-500'
-                    }`}
-                    style={{ width: `${trap.efficiency}%` }}
-                  ></div>
-                </div>
-              </div>
-            </div>
+            <TrapDisplayForm
+              key={trap._id}
+              trap={trap}
+              onDelete={deleteTrap}
+              onUpdate={updateTrap}
+              getStatusColor={getStatusColor}
+              getStatusIcon={getStatusIcon}
+              getStatusText={getStatusText}
+              calculateDaysRemaining={calculateDaysRemaining}
+              generateQRCode={generateQRCode}
+              downloadQRCode={downloadQRCode}     
+            />
           ))}
         </div>
 
@@ -669,10 +499,6 @@ const refreshTrap = async (id) => {
             <Bug className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-xl font-semibold text-gray-600 mb-2">ยังไม่มีกับดัก</h3>
             <p className="text-gray-500 mb-4">เริ่มต้นด้วยการเพิ่มกับดักแรกของคุณ</p>
-            <AddTrapButton 
-              onClick={() => setShowAddForm(true)} 
-              className="inline-flex"
-            />
           </div>
         )}
       </div>
