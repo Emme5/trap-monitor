@@ -1,10 +1,51 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, Bug, Calendar, MapPin, MessageCircleWarning, Plus, Trash2, QrCode, Camera, Download, FileChartColumnIncreasing } from 'lucide-react';
+import { notifyApi } from './api/notifyApi';
 import { trapApi } from './api/trapApi';
 import AddTrapButton from './component/AddTrapButton';
 import TrapDisplayForm from './component/TrapDisplayForm';
+import { useNavigate } from 'react-router-dom';
 
 const InsectTrapMonitor = () => {
+
+const navigate = useNavigate();
+ 
+  const getIssueCount = async () => {
+  try {
+    const notifyData = await notifyApi.getAllNotifies();
+    return notifyData.length;
+  } catch (error) {
+    console.error('Error fetching notify count:', error);
+    return 0;
+  }
+};
+
+// เพิ่ม state สำหรับเก็บจำนวนแจ้งเตือน
+const [notifyCount, setNotifyCount] = useState(0);
+
+// เพิ่ม useEffect เพื่อโหลดข้อมูลแจ้งเตือน
+useEffect(() => {
+  const fetchNotifyCount = async () => {
+    const count = await getIssueCount();
+    setNotifyCount(count);
+  };
+  fetchNotifyCount();
+}, []);
+
+  const reportIssue = (trapId, issueData) => {
+  // Get existing issues from localStorage
+  const existingIssues = JSON.parse(localStorage.getItem('trapIssues') || '[]');
+  
+  // Add new issue
+  const newIssues = [...existingIssues, issueData];
+  
+  // Save to localStorage
+  localStorage.setItem('trapIssues', JSON.stringify(newIssues));
+  
+  // Optional: Show success message
+  alert('บันทึกการแจ้งปัญหาเรียบร้อยแล้ว');
+};
+
   const updateTrap = async (id, updateData) => {
   try {
     // เรียก API เพื่ออัพเดทข้อมูล
@@ -297,18 +338,22 @@ const InsectTrapMonitor = () => {
           </div>
         </div>
 
+        <div 
+          onClick={() => window.open ('/notify', '_blank')}
+          className="cursor-pointer hover:shadow-lg transition-shadow">
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600">สถานะเร่งด่วน</p>
-              <p className="text-3xl font-bold text-red-600">{criticalTraps}</p>
-            </div>
+              <div>
+                <p className="text-gray-600">แจ้งเตือน</p>
+                <p className="text-3xl font-bold text-red-600">{notifyCount}</p>
+              </div>
             <div className="bg-red-100 p-3 rounded-lg">
               <AlertTriangle className="w-6 h-6 text-red-600" />
             </div>
           </div>
         </div>
-
+       </div>
+        
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex items-center justify-between">
             <div>
@@ -484,6 +529,7 @@ const InsectTrapMonitor = () => {
               trap={trap}
               onDelete={deleteTrap}
               onUpdate={updateTrap}
+              reportIssue={reportIssue}
               getStatusColor={getStatusColor}
               getStatusIcon={getStatusIcon}
               getStatusText={getStatusText}

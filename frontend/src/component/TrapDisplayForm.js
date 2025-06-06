@@ -1,20 +1,43 @@
 import React, { useState } from 'react'; // Add useState import
-import { Bug, MapPin, QrCode, Trash2, Download, Edit2 } from 'lucide-react'; // Add Download icon
+import { Bug, MapPin, QrCode, Trash2, Download, Edit2, AlertCircle } from 'lucide-react'; // Add Download icon
 import EditForm from './EditForm';
+import { notifyApi } from '../api/notifyApi';
 
 const TrapDisplayForm = ({ 
   trap, 
   onDelete,
-  onUpdate, 
+  onUpdate,
+  reportIssue,
   getStatusColor, 
   getStatusIcon, 
   getStatusText,
   calculateDaysRemaining,
   generateQRCode,
-  downloadQRCode, ...props }) => {
+  downloadQRCode,
+}) => {
 
+  const [showIssueForm, setShowIssueForm] = useState(false);
+  const [issueText, setIssueText] = useState('');
   const [showQRGenerator, setShowQRGenerator] = useState(null);
   const [showEditForm, setShowEditForm] = useState(false);
+
+  const handleIssueSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await notifyApi.createNotify({
+        trapId: trap._id,
+        trapName: trap.name,
+        description: issueText,
+      });
+      
+      setIssueText('');
+      setShowIssueForm(false);
+      alert('บันทึกการแจ้งปัญหาเรียบร้อยแล้ว');
+    } catch (error) {
+      console.error('Error submitting issue:', error);
+      alert('ไม่สามารถบันทึกการแจ้งปัญหาได้');
+    }
+  };
 
   const handleDelete = async () => {
     if (window.confirm('คุณต้องการลบกับดักนี้ใช่หรือไม่?')) {
@@ -115,6 +138,16 @@ const TrapDisplayForm = ({
           <div className="text-sm">{trap.notes}</div>
         </div>
       )}
+      <div className="flex gap-2">
+        {/* ...existing buttons... */}
+        <button
+          onClick={() => setShowIssueForm(true)}
+          className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg"
+          title="แจ้งปัญหา"
+        >
+          <AlertCircle className="w-4 h-4" />
+        </button>
+      </div>
 
       {showQRGenerator && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -154,6 +187,40 @@ const TrapDisplayForm = ({
           onUpdate={onUpdate}
           onCancel={() => setShowEditForm(false)}
         />
+      )}
+      {showIssueForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-xl font-bold mb-4">แจ้งปัญหากับดัก - {trap.name}</h3>
+            <form onSubmit={handleIssueSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">รายละเอียดปัญหา</label>
+                <textarea
+                  value={issueText}
+                  onChange={(e) => setIssueText(e.target.value)}
+                  className="w-full p-3 border rounded-lg h-32"
+                  placeholder="กรุณาระบุรายละเอียดของปัญหาที่พบ"
+                  required
+                />
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded-lg"
+                >
+                  ส่งรายงาน
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowIssueForm(false)}
+                  className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 py-2 px-4 rounded-lg"
+                >
+                  ยกเลิก
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
